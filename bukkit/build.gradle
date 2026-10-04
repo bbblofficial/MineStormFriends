@@ -1,0 +1,19 @@
+plugins { id 'com.gradleup.shadow' }
+
+dependencies {
+    implementation project(':common')
+    compileOnly 'org.spigotmc:spigot-api:1.8.8-R0.1-SNAPSHOT'
+}
+
+processResources {
+    inputs.property('version', project.version)
+    filesMatching('plugin.yml') { expand('version': project.version) }
+}
+
+jar { enabled = false }
+
+shadowJar {
+    archiveBaseName = 'MineStormFriends-Bukkit'
+    archiveClassifier = ''
+}
+build.dependsOn shadowJar

@@ -1,0 +1,14 @@
+plugins { id 'com.gradleup.shadow' }
+
+dependencies {
+    compileOnly 'com.velocitypowered:velocity-api:3.3.0-SNAPSHOT'
+    annotationProcessor 'com.velocitypowered:velocity-api:3.3.0-SNAPSHOT'
+}
+
+jar { enabled = false }
+
+shadowJar {
+    archiveBaseName = 'MineStormFriends-Velocity'
+    archiveClassifier = ''
+}
+build.dependsOn shadowJar

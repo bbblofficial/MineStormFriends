@@ -1,0 +1,5 @@
+name: MineStormFriends
+version: ${version}
+main: net.minestorm.friends.bungee.MineStormFriendsBungee
+author: Muvixo
+description: Cross-server friends relay - Created by Muvixo

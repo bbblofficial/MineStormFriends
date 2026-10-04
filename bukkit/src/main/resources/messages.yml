@@ -1,0 +1,101 @@
+# MineStormFriends messages.yml - Created by Muvixo
+# Theme: Aqua (&b) + White (&f) + Gray (&7)
+
+prefix: "&b&lMSF &7» &f"
+no-permission: "&cYou do not have permission to do that."
+invalid-arguments: "&cUsage: &f/%0%"
+invalid-input: "&cUnknown sub-command: &f%0%"
+player-not-found: "&cPlayer &f%0% &cwas not found."
+player-only: "&cThat command can only be run by a player."
+
+creator:
+  - "&b&lMineStormFriends"
+  - "&fCreated by &bMuvixo"
+  - "&7A cross-server friends system."
+  - "&7Version &f%0%"
+
+help:
+  - "&b&l──────────── &fMineStormFriends &b&l────────────"
+  - "&b/msf add <player>       &7- &fSend a friend request"
+  - "&b/msf accept <player>    &7- &fAccept a request"
+  - "&b/msf deny <player>      &7- &fDeny a request"
+  - "&b/msf list [page]        &7- &fList your friends"
+  - "&b/msf remove <player>    &7- &fRemove a friend"
+  - "&b/msf removeall          &7- &fClear your friend list"
+  - "&b/msf requests           &7- &fView pending requests"
+  - "&b/msf toggle             &7- &fToggle incoming requests"
+  - "&b/msf creator            &7- &fPlugin info"
+  - "&b&l──────────────────────────────────────────"
+
+admin-help:
+  - "&b&l────────── &fMSF Admin &b&l──────────"
+  - "&b/msf admin reload                 &7- &fReload configs"
+  - "&b/msf admin list <player> [page]   &7- &fList someone's friends"
+  - "&b/msf admin add <p> <t>            &7- &fForce add friend"
+  - "&b/msf admin remove <p> <t>         &7- &fForce remove friend"
+  - "&b/msf admin removeall <player>     &7- &fClear a player's friends"
+  - "&b/msf admin clearrequests <player> &7- &fClear pending requests"
+  - "&b/msf admin toggle <player>        &7- &fToggle player's requests"
+  - "&b/msf admin info <player>          &7- &fShow player data"
+  - "&b&l──────────────────────────────────"
+
+# ── Friend flow ──
+max-friends: "&cYou reached your friend limit of &f%0%&c. Use &b/msf remove &cto free a slot."
+request-sent: "&fFriend request sent to &b%0%&f. It expires in &b%1% &fmin."
+friend-request-header:
+  - "&b&l────────── &fFriend Request &b&l──────────"
+friend-request-from: "&b%0% &fwants to be your friend."
+friend-request-options: "&fClick one: "
+request-option-accept: "&a&l[ACCEPT]"
+spacer: " &8- "
+request-option-deny: "&c&l[DENY]"
+friend-request-footer:
+  - "&b&l──────────────────────────────────"
+request-accepted: "&fYou are now friends with &b%0%&f."
+request-denied: "&fYou denied the request from &b%0%&f."
+request-denied-sender: "&c%0% &7denied your friend request."
+request-expired-sender: "&7Your request to &f%0% &7expired."
+request-expired-receiver: "&7The request from &f%0% &7expired."
+pending-requests: "&fYou have &b%0% &fpending request(s). Use &b/msf requests&f."
+request-not-allowed: "&cThat player isn't accepting friend requests."
+no-request: "&cNo pending request from &f%0%&c."
+no-requests: "&7You have no pending requests."
+requests-header: "&fPending requests: &b%0%"
+requests-line: " &b• &f%0%"
+already-friends: "&cYou are already friends with that player."
+cannot-friend-yourself: "&cYou can't add yourself."
+not-friends: "&c%0% is not in your friend list."
+no-friends: "&7You have no friends yet."
+removeall: "&fYour friend list was cleared."
+removeall-empty: "&7Your friend list is already empty."
+unfriend-sender: "&fRemoved &b%0% &ffrom your friends."
+unfriend-receiver: "&b%0% &fremoved you from their friends."
+
+toggle: "&fFriend requests are now &b%0%&f."
+state-enabled: "enabled"
+state-disabled: "disabled"
+
+list-header:
+  - "&b&l────────── &fFriends &b&l──────────"
+list-page: "&fPage &b%0% &7/ &b%1%"
+list-format: " &b• &f%0% %1%"
+list-status:
+  online: "&a(online · %0%)"
+  offline: "&7(offline)"
+list-footer:
+  - "&b&l──────────────────────────────"
+
+# ── Admin responses ──
+admin:
+  reloaded: "&aConfiguration reloaded."
+  forced-add: "&fForced &b%0% &f+ &b%1% &fas friends."
+  forced-remove: "&fForced removal: &b%0% &7↔ &b%1%"
+  forced-removeall: "&fCleared &b%0%&f's friends."
+  cleared-requests: "&fCleared requests for &b%0%&f."
+  toggled: "&fToggled requests for &b%0% &f→ &b%1%"
+  info-header: "&b&l───────── &f%0% &b&l─────────"
+  info-line: " &b• &f%0%&7: &f%1%"
+
+# ── Join / quit notifications ──
+friend-join: "&8[&b+&8] &f%0% &7joined the network."
+friend-quit: "&8[&b-&8] &f%0% &7left the network."

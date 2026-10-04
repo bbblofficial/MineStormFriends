@@ -1,0 +1,26 @@
+# MineStormFriends - Created by Muvixo
+options:
+  friend-add-timeout: 5          # minutes until a request expires
+  max-friends: 25                # default limit
+  use-permission-limits: true    # honour minestormfriends.limit.<n>
+
+storage:
+  # FLATFILE | SQLITE | MYSQL   (changing this requires a restart)
+  # Use MYSQL on a network so every server shares the same data.
+  type: FLATFILE
+  mysql:
+    host: 127.0.0.1
+    port: 3306
+    database: minestormfriends
+    username: root
+    password: ''
+    params: 'useSSL=false&characterEncoding=utf8&autoReconnect=true'
+
+network:
+  # true  = a MineStormFriends proxy plugin (Bungee/Velocity) is installed
+  # false = single server, everything is handled locally
+  proxy: true
+  # Unique name of THIS server (use the same name as in the proxy config)
+  server-name: server
+  # Packets are HMAC-signed. Use the SAME long random value on every backend.
+  secret: change-me-to-a-long-random-string

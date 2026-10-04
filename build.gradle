@@ -1,0 +1,26 @@
+plugins {
+    id 'com.gradleup.shadow' version '8.3.5' apply false
+}
+
+allprojects {
+    group = 'net.minestorm.friends'
+    version = '1.0.0'
+
+    repositories {
+        mavenCentral()
+        maven { url = 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
+        maven { url = 'https://repo.papermc.io/repository/maven-public/' }
+        maven { url = 'https://oss.sonatype.org/content/repositories/snapshots/' }
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        // Bukkit / Bungee / common run on Java 8+, Velocity needs 17+.
+        // NOTE: --release needs a JDK >= 9 to *build* (CI uses 17 and 21).
+        options.release = (project.name == 'velocity') ? 17 : 8
+    }
+}

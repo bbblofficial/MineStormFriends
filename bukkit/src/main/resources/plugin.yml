@@ -1,0 +1,75 @@
+name: MineStormFriends
+version: ${version}
+main: net.minestorm.friends.bukkit.MineStormFriendsPlugin
+author: Muvixo
+description: Cross-server friends system - Created by Muvixo
+api-version: '1.13'
+
+commands:
+  minestormfriends:
+    aliases: [msf, friends, f]
+    description: MineStormFriends main command.
+    usage: /msf help
+
+permissions:
+  minestormfriends.use:
+    description: Parent of all user permissions.
+    default: true
+    children:
+      minestormfriends.add: true
+      minestormfriends.accept: true
+      minestormfriends.deny: true
+      minestormfriends.list: true
+      minestormfriends.remove: true
+      minestormfriends.removeall: true
+      minestormfriends.requests: true
+      minestormfriends.toggle: true
+  minestormfriends.add:
+    default: true
+  minestormfriends.accept:
+    default: true
+  minestormfriends.deny:
+    default: true
+  minestormfriends.list:
+    default: true
+  minestormfriends.remove:
+    default: true
+  minestormfriends.removeall:
+    default: true
+  minestormfriends.requests:
+    default: true
+  minestormfriends.toggle:
+    default: true
+
+  minestormfriends.admin:
+    description: Parent of all admin permissions.
+    default: op
+    children:
+      minestormfriends.admin.reload: true
+      minestormfriends.admin.list: true
+      minestormfriends.admin.add: true
+      minestormfriends.admin.remove: true
+      minestormfriends.admin.removeall: true
+      minestormfriends.admin.clearrequests: true
+      minestormfriends.admin.toggle: true
+      minestormfriends.admin.info: true
+  minestormfriends.admin.reload:
+    default: op
+  minestormfriends.admin.list:
+    default: op
+  minestormfriends.admin.add:
+    default: op
+  minestormfriends.admin.remove:
+    default: op
+  minestormfriends.admin.removeall:
+    default: op
+  minestormfriends.admin.clearrequests:
+    default: op
+  minestormfriends.admin.toggle:
+    default: op
+  minestormfriends.admin.info:
+    default: op
+
+  minestormfriends.bypass:
+    description: Ignore the friend limit.
+    default: op
