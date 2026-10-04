@@ -1,6 +1,10 @@
 plugins { id 'com.gradleup.shadow' }
 
 dependencies {
+    // added by adder.py
+    implementation 'com.mysql:mysql-connector-j:8.0.33'
+    implementation 'com.zaxxer:HikariCP:4.0.3'
+
     implementation project(':common')
     compileOnly 'org.spigotmc:spigot-api:1.8.8-R0.1-SNAPSHOT'
 }
@@ -13,6 +17,8 @@ processResources {
 jar { enabled = false }
 
 shadowJar {
+    relocate 'com.zaxxer.hikari', 'net.minestorm.friends.libs.hikari'
+
     archiveBaseName = 'MineStormFriends-Bukkit'
     archiveClassifier = ''
 }

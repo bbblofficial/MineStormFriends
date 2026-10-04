@@ -1,5 +1,7 @@
 package net.minestorm.friends.bukkit.data;
 
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import net.minestorm.friends.bukkit.MineStormFriendsPlugin;
 import net.minestorm.friends.common.Friend;
 import net.minestorm.friends.common.storage.PlayerData;
@@ -14,66 +16,159 @@ import java.sql.Statement;
 import java.util.UUID;
 
 /**
- * SQLite or MySQL through plain JDBC (both drivers ship with Spigot / Paper).
- * Uses only portable SQL (UPDATE, then INSERT when nothing was updated).
+ * SQLite or MySQL through JDBC.
+ *
+ * With storage.type: MYSQL the plugin connects using only host / database /
+ * username / password from config.yml. If the database does not exist it is
+ * created automatically along with the tables and indexes. A HikariCP pool
+ * keeps connections alive so per-query overhead is negligible.
+ *
+ * All SQL is written so that any number of servers may apply the same event
+ * without conflict (INSERT ... ON DUPLICATE KEY UPDATE on MySQL,
+ * INSERT OR REPLACE on SQLite).
  */
 public final class SqlStore implements DataStore {
+
     private final MineStormFriendsPlugin plugin;
     private final boolean mysql;
-    private Connection conn;
+
+    // SQLite
+    private final File sqliteFile;
+
+    // MySQL
+    private final String jdbcUrl;      // full url (db guaranteed to exist)
+    private final String serverUrl;    // url without db, used for CREATE DATABASE
+    private final String dbName;
+    private final String username;
+    private final String password;
+
+    private HikariDataSource pool;
 
     public SqlStore(MineStormFriendsPlugin plugin, boolean mysql) {
         this.plugin = plugin;
         this.mysql = mysql;
-    }
 
-    @Override public synchronized void init() throws Exception {
-        open();
-        try (Statement st = conn.createStatement()) {
-            st.executeUpdate("CREATE TABLE IF NOT EXISTS msf_players ("
-                    + "uuid VARCHAR(36) NOT NULL PRIMARY KEY, "
-                    + "name VARCHAR(32), "
-                    + "allow_requests INTEGER NOT NULL DEFAULT 1, "
-                    + "last_seen BIGINT NOT NULL DEFAULT 0)");
-            st.executeUpdate("CREATE TABLE IF NOT EXISTS msf_friends ("
-                    + "owner VARCHAR(36) NOT NULL, "
-                    + "friend VARCHAR(36) NOT NULL, "
-                    + "friend_name VARCHAR(32), "
-                    + "PRIMARY KEY (owner, friend))");
-        }
-    }
-
-    @Override public synchronized void close() {
-        try { if (conn != null) conn.close(); } catch (SQLException ignored) { }
-        conn = null;
-    }
-
-    private void open() throws SQLException {
-        try { if (conn != null) conn.close(); } catch (SQLException ignored) { }
         if (mysql) {
             String host = plugin.getConfig().getString("storage.mysql.host", "127.0.0.1");
             int port = plugin.getConfig().getInt("storage.mysql.port", 3306);
-            String db = plugin.getConfig().getString("storage.mysql.database", "minestormfriends");
-            String params = plugin.getConfig().getString("storage.mysql.params", "useSSL=false");
-            conn = DriverManager.getConnection(
-                    "jdbc:mysql://" + host + ":" + port + "/" + db + "?" + params,
-                    plugin.getConfig().getString("storage.mysql.username", "root"),
-                    plugin.getConfig().getString("storage.mysql.password", ""));
+            this.dbName = plugin.getConfig().getString("storage.mysql.database", "minestormfriends");
+            this.username = plugin.getConfig().getString("storage.mysql.username", "root");
+            this.password = plugin.getConfig().getString("storage.mysql.password", "");
+            boolean useSSL = plugin.getConfig().getBoolean("storage.mysql.useSSL", false);
+            String tz = plugin.getConfig().getString("storage.mysql.serverTimezone", "UTC");
+            String enc = plugin.getConfig().getString("storage.mysql.characterEncoding", "utf8");
+
+            String base = "jdbc:mysql://" + host + ":" + port;
+            String opts = "?useSSL=" + useSSL
+                    + "&serverTimezone=" + tz
+                    + "&characterEncoding=" + enc
+                    + "&useUnicode=true"
+                    + "&allowPublicKeyRetrieval=true"
+                    + "&autoReconnect=true"
+                    + "&createDatabaseIfNotExist=true";
+            this.serverUrl = base + "/" + opts;
+            this.jdbcUrl = base + "/" + dbName + opts;
+            this.sqliteFile = null;
         } else {
-            try { Class.forName("org.sqlite.JDBC"); } catch (ClassNotFoundException ignored) { }
-            File f = new File(plugin.getDataFolder(), "friends.db");
-            plugin.getDataFolder().mkdirs();
-            conn = DriverManager.getConnection("jdbc:sqlite:" + f.getAbsolutePath());
+            this.sqliteFile = new File(plugin.getDataFolder(), "friends.db");
+            this.jdbcUrl = null;
+            this.serverUrl = null;
+            this.dbName = null;
+            this.username = null;
+            this.password = null;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // DataStore
+    // ------------------------------------------------------------------
+
+    @Override public synchronized void init() throws Exception {
+        if (mysql) ensureDatabaseExists();
+        open();
+        createSchema();
+    }
+
+    @Override public synchronized void close() {
+        if (pool != null && !pool.isClosed()) pool.close();
+        pool = null;
+    }
+
+    // ------------------------------------------------------------------
+    // connections
+    // ------------------------------------------------------------------
+
+    private void open() throws SQLException {
+        HikariConfig cfg = new HikariConfig();
+        cfg.setJdbcUrl(jdbcUrl != null ? jdbcUrl : "jdbc:sqlite:" + sqliteFile.getAbsolutePath());
+        cfg.setPoolName("MineStormFriends-" + (mysql ? "MySQL" : "SQLite"));
+        cfg.setLeakDetectionThreshold(60000L);
+
+        if (mysql) {
+            cfg.setDriverClassName("com.mysql.cj.jdbc.Driver");
+            cfg.setUsername(username);
+            cfg.setPassword(password);
+            cfg.setMaximumPoolSize(plugin.getConfig().getInt("storage.mysql.poolSize", 10));
+            cfg.setMinimumIdle(1);
+            cfg.setConnectionTimeout(10000L);
+            cfg.setIdleTimeout(600000L);
+            cfg.setMaxLifetime(1800000L);
+        } else {
+            cfg.setDriverClassName("org.sqlite.JDBC");
+            cfg.setMaximumPoolSize(1); // SQLite is a single-file DB
+            if (!plugin.getDataFolder().exists()) plugin.getDataFolder().mkdirs();
+        }
+
+        pool = new HikariDataSource(cfg);
+    }
+
+    /** Connect to the server (no db) and CREATE DATABASE if needed. */
+    private void ensureDatabaseExists() throws SQLException {
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+        } catch (ClassNotFoundException ex) {
+            throw new SQLException("MySQL driver not found", ex);
+        }
+        try (Connection c = DriverManager.getConnection(serverUrl, username, password);
+             Statement st = c.createStatement()) {
+            st.executeUpdate("CREATE DATABASE IF NOT EXISTS `" + dbName + "` "
+                    + "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+        } catch (SQLException ex) {
+            plugin.getLogger().warning(
+                "Could not auto-create database '" + dbName + "': " + ex.getMessage());
+            // continue - the DB likely exists and we lack CREATE permission
+        }
+    }
+
+    private void createSchema() throws SQLException {
+        String engineSuffix = mysql
+                ? " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+                : "";
+        try (Connection c = pool.getConnection();
+             Statement st = c.createStatement()) {
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS msf_players ("
+                    + " uuid VARCHAR(36) NOT NULL PRIMARY KEY,"
+                    + " name VARCHAR(32),"
+                    + " allow_requests INTEGER NOT NULL DEFAULT 1,"
+                    + " last_seen BIGINT NOT NULL DEFAULT 0)" + engineSuffix);
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS msf_friends ("
+                    + " owner VARCHAR(36) NOT NULL,"
+                    + " friend VARCHAR(36) NOT NULL,"
+                    + " friend_name VARCHAR(32),"
+                    + " PRIMARY KEY (owner, friend),"
+                    + " INDEX idx_msf_friends_owner (owner),"
+                    + " INDEX idx_msf_friends_friend (friend))" + engineSuffix);
         }
     }
 
     private Connection c() throws SQLException {
-        if (conn == null || conn.isClosed() || !conn.isValid(2)) open();
-        return conn;
+        if (pool == null) throw new SQLException("SqlStore not initialised");
+        return pool.getConnection();
     }
 
     private int exec(String sql, Object... params) throws SQLException {
-        try (PreparedStatement ps = c().prepareStatement(sql)) {
+        try (Connection c = c();
+             PreparedStatement ps = c.prepareStatement(sql)) {
             for (int i = 0; i < params.length; i++) ps.setObject(i + 1, params[i]);
             return ps.executeUpdate();
         }
@@ -83,20 +178,34 @@ public final class SqlStore implements DataStore {
         plugin.getLogger().warning("SQL error: " + e.getMessage());
     }
 
-    private void insertPlayer(UUID id, String name, boolean allow, long seen) {
-        try {
-            exec("INSERT INTO msf_players (uuid, name, allow_requests, last_seen) VALUES (?,?,?,?)",
-                    id.toString(), name, allow ? 1 : 0, seen);
-        } catch (SQLException duplicate) {
-            // another server inserted the row first - fine
-        }
+    // ------------------------------------------------------------------
+    // portable upsert helpers
+    // ------------------------------------------------------------------
+
+    private String upsertPlayerSql() {
+        return mysql
+                ? "INSERT INTO msf_players (uuid, name, allow_requests, last_seen) VALUES (?,?,?,?) "
+                + "ON DUPLICATE KEY UPDATE name=VALUES(name), allow_requests=VALUES(allow_requests), "
+                + "last_seen=GREATEST(last_seen, VALUES(last_seen))"
+                : "INSERT OR REPLACE INTO msf_players (uuid, name, allow_requests, last_seen) VALUES (?,?,?,?)";
     }
+
+    private String upsertFriendSql() {
+        return mysql
+                ? "INSERT INTO msf_friends (owner, friend, friend_name) VALUES (?,?,?) "
+                + "ON DUPLICATE KEY UPDATE friend_name=VALUES(friend_name)"
+                : "INSERT OR REPLACE INTO msf_friends (owner, friend, friend_name) VALUES (?,?,?)";
+    }
+
+    // ------------------------------------------------------------------
+    // DataStore implementation
+    // ------------------------------------------------------------------
 
     @Override public synchronized PlayerData load(UUID uuid, String name) {
         PlayerData d = new PlayerData(uuid);
         d.setLastName(name);
-        try {
-            try (PreparedStatement ps = c().prepareStatement(
+        try (Connection c = c()) {
+            try (PreparedStatement ps = c.prepareStatement(
                     "SELECT name, allow_requests, last_seen FROM msf_players WHERE uuid=?")) {
                 ps.setString(1, uuid.toString());
                 try (ResultSet rs = ps.executeQuery()) {
@@ -107,7 +216,7 @@ public final class SqlStore implements DataStore {
                     }
                 }
             }
-            try (PreparedStatement ps = c().prepareStatement(
+            try (PreparedStatement ps = c.prepareStatement(
                     "SELECT friend, friend_name FROM msf_friends WHERE owner=?")) {
                 ps.setString(1, uuid.toString());
                 try (ResultSet rs = ps.executeQuery()) {
@@ -127,11 +236,18 @@ public final class SqlStore implements DataStore {
     @Override public synchronized void saveProfile(UUID uuid, String name, boolean markSeen) {
         if (name == null) return;
         try {
-            long now = System.currentTimeMillis();
-            int n = markSeen
-                    ? exec("UPDATE msf_players SET name=?, last_seen=? WHERE uuid=?", name, now, uuid.toString())
-                    : exec("UPDATE msf_players SET name=? WHERE uuid=?", name, uuid.toString());
-            if (n == 0) insertPlayer(uuid, name, true, markSeen ? now : 0L);
+            long now = markSeen ? System.currentTimeMillis() : 0L;
+            // read current allow_requests first to avoid clobbering it
+            boolean allow = true;
+            try (Connection c = c();
+                 PreparedStatement ps = c.prepareStatement(
+                         "SELECT allow_requests FROM msf_players WHERE uuid=?")) {
+                ps.setString(1, uuid.toString());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) allow = rs.getInt(1) != 0;
+                }
+            }
+            exec(upsertPlayerSql(), uuid.toString(), name, allow ? 1 : 0, now);
         } catch (SQLException e) {
             warn(e);
         }
@@ -139,16 +255,9 @@ public final class SqlStore implements DataStore {
 
     @Override public synchronized void addFriend(UUID owner, UUID friend, String friendName) {
         try {
-            int n = exec("UPDATE msf_friends SET friend_name=? WHERE owner=? AND friend=?",
-                    friendName, owner.toString(), friend.toString());
-            if (n == 0) {
-                try {
-                    exec("INSERT INTO msf_friends (owner, friend, friend_name) VALUES (?,?,?)",
-                            owner.toString(), friend.toString(), friendName);
-                } catch (SQLException duplicate) {
-                    // already inserted by another server
-                }
-            }
+            exec(upsertFriendSql(),
+                    owner.toString(), friend.toString(),
+                    friendName == null ? "unknown" : friendName);
         } catch (SQLException e) {
             warn(e);
         }
@@ -156,7 +265,8 @@ public final class SqlStore implements DataStore {
 
     @Override public synchronized void removeFriend(UUID owner, UUID friend) {
         try {
-            exec("DELETE FROM msf_friends WHERE owner=? AND friend=?", owner.toString(), friend.toString());
+            exec("DELETE FROM msf_friends WHERE owner=? AND friend=?",
+                    owner.toString(), friend.toString());
         } catch (SQLException e) {
             warn(e);
         }
@@ -164,16 +274,18 @@ public final class SqlStore implements DataStore {
 
     @Override public synchronized void setAllowRequests(UUID uuid, String name, boolean allow) {
         try {
-            int n = exec("UPDATE msf_players SET allow_requests=? WHERE uuid=?", allow ? 1 : 0, uuid.toString());
-            if (n == 0) insertPlayer(uuid, name, allow, 0L);
+            exec(upsertPlayerSql(), uuid.toString(),
+                    name == null ? "" : name, allow ? 1 : 0, 0L);
         } catch (SQLException e) {
             warn(e);
         }
     }
 
     @Override public synchronized UUID findUuid(String name) {
-        try (PreparedStatement ps = c().prepareStatement(
-                "SELECT uuid FROM msf_players WHERE LOWER(name)=LOWER(?) ORDER BY last_seen DESC LIMIT 1")) {
+        try (Connection c = c();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT uuid FROM msf_players WHERE LOWER(name)=LOWER(?) "
+                     + "ORDER BY last_seen DESC LIMIT 1")) {
             ps.setString(1, name);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) return UUID.fromString(rs.getString(1));

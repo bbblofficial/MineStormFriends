@@ -28,4 +28,7 @@ public interface DataStore {
 
     /** Case-insensitive lookup by last known name, or null. */
     UUID findUuid(String name);
+
+    /** True if this backend is a shared remote database (MySQL). */
+    default boolean isRemote() { return false; }
 }

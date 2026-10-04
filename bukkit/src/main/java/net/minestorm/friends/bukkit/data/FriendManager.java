@@ -3,6 +3,8 @@ package net.minestorm.friends.bukkit.data;
 import net.minestorm.friends.bukkit.MineStormFriendsPlugin;
 import net.minestorm.friends.common.Friend;
 import net.minestorm.friends.common.storage.PlayerData;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -67,5 +69,17 @@ public final class FriendManager {
         plugin.data().setAllowRequests(id, name, value);
         PlayerData d = cache.get(id);
         if (d != null) d.setAllowRequests(value);
+    }
+
+    /**
+     * Re-reads cached entries for every player online on THIS server from the
+     * backend. Used by CacheRefresher so changes made on other servers become
+     * visible here without a relog.
+     */
+    public void refreshOnline() {
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            UUID id = p.getUniqueId();
+            cache.put(id, plugin.data().load(id, p.getName()));
+        }
     }
 }

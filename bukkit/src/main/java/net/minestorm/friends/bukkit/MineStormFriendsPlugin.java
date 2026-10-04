@@ -31,6 +31,7 @@ public final class MineStormFriendsPlugin extends JavaPlugin {
     private Presence presence;
     private NetHandler handler;
     private BukkitNet net;
+    private CacheRefresher refresher;
 
     @Override public void onEnable() {
         instance = this;
@@ -67,11 +68,15 @@ public final class MineStormFriendsPlugin extends JavaPlugin {
         // plugin enabled while players are online (e.g. /reload)
         for (Player p : Bukkit.getOnlinePlayers()) friends.cacheLoad(p.getUniqueId(), p.getName());
 
+        refresher = new CacheRefresher(this);
+        refresher.start();
+
         getLogger().info("MineStormFriends enabled (storage: " + store.getClass().getSimpleName()
-                + ") - Created by Muvixo");
+                + (store.isRemote() ? " [shared]" : "") + ") - Created by Muvixo");
     }
 
     @Override public void onDisable() {
+        if (refresher != null) refresher.stop();
         if (requests != null) requests.shutdown();
         if (store != null) store.close();
     }

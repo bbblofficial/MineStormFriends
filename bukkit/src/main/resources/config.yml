@@ -7,15 +7,29 @@ options:
 storage:
   # FLATFILE | SQLITE | MYSQL   (changing this requires a restart)
   # Use MYSQL on a network so every server shares the same data.
-  type: FLATFILE
+  # The plugin creates the database and tables itself.
+  type: MYSQL
+
+  # --- fill these in for MySQL ---
   mysql:
     host: 127.0.0.1
     port: 3306
     database: minestormfriends
     username: root
     password: ''
-    params: 'useSSL=false&characterEncoding=utf8&autoReconnect=true'
 
+    # optional overrides
+    useSSL: false
+    serverTimezone: UTC
+    characterEncoding: utf8
+    poolSize: 10
+
+  # used only when type: SQLITE
+  file: friends.db
+
+  # How often each server re-reads the shared DB (seconds).
+  # 0 = disabled. Only meaningful with MYSQL.
+  refresh-interval-seconds: 5
 network:
   # true  = a MineStormFriends proxy plugin (Bungee/Velocity) is installed
   # false = single server, everything is handled locally
