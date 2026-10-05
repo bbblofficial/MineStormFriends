@@ -17,16 +17,16 @@ storage:
     port: 3306
     database: minestormfriends
     username: root
-    password: ''
+    password: '199118811771456aAa!2'
 
     # optional overrides
     useSSL: false
     serverTimezone: UTC
     characterEncoding: utf8
     poolSize: 10
-    connectionTimeoutSeconds: 5    # give up quickly when the database is down
-    maxLifetimeSeconds: 1500       # must be lower than the MySQL wait_timeout
-    keepaliveSeconds: 60           # ping idle connections (0 = off, min 30)
+    connectionTimeoutSeconds: 5
+    maxLifetimeSeconds: 1500
+    keepaliveSeconds: 60
 
   # used only when type: SQLITE
   file: friends.db

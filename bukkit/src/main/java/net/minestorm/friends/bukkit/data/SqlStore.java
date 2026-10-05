@@ -186,10 +186,11 @@ public final class SqlStore implements DataStore {
              Statement st = c.createStatement()) {
             st.executeUpdate("CREATE DATABASE IF NOT EXISTS `" + dbName + "` "
                     + "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-        } catch (SQLException ex) {
+        } catch (Throwable ex) {
             plugin.getLogger().warning(
                 "Could not auto-create database '" + dbName + "': " + ex.getMessage());
-            // continue - the DB likely exists and we lack CREATE permission
+            // continue - the DB likely exists and we lack CREATE permission,
+            // or the credentials are wrong; open() will report the real error.
         }
     }
 
