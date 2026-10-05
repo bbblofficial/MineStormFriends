@@ -5,13 +5,18 @@ import net.minestorm.friends.common.net.Packet;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
+import java.util.UUID;
+
 public final class BukkitNet {
     private static final String DEFAULT_SECRET = "change-me-to-a-long-random-string";
 
     private final MineStormFriendsPlugin plugin;
+    /** Random per start: lets a backend recognise (and skip) the echo of its own packets. */
+    private final String instanceId = UUID.randomUUID().toString();
     private boolean proxy;
     private String secret;
     private long lastWarn;
+    private long lastChannelWarn;
 
     public BukkitNet(MineStormFriendsPlugin plugin) {
         this.plugin = plugin;
@@ -29,15 +34,34 @@ public final class BukkitNet {
     }
 
     /**
-     * Delivers a packet to EVERY server (including this one) through the proxy.
-     * Without a proxy (or without a player to carry the message) it is applied locally.
+     * Delivers a packet to EVERY server through the proxy and ALWAYS applies it on
+     * this server immediately.
+     *
+     * FIX: before, a packet was only applied here when it came back from the proxy.
+     * If the relay was missing / the channel not registered / the packet got lost,
+     * the action silently did nothing. Now this server never depends on the proxy for
+     * its own actions; the echo of our own packet is ignored in receive(). Other
+     * servers are additionally kept in sync through the database (CacheRefresher).
      */
     public void broadcast(Packet p) {
         if (proxy) {
             Player carrier = firstPlayer();
             if (carrier != null) {
-                carrier.sendPluginMessage(plugin, Packet.CHANNEL, p.encode(secret));
-                return;
+                if (carrier.getListeningPluginChannels().contains(Packet.CHANNEL)) {
+                    try {
+                        carrier.sendPluginMessage(plugin, Packet.CHANNEL, p.withOrigin(instanceId).encode(secret));
+                    } catch (RuntimeException ex) {
+                        plugin.getLogger().warning("Could not send a plugin message: " + ex);
+                    }
+                } else {
+                    long now = System.currentTimeMillis();
+                    if (now - lastChannelWarn > 60_000L) {
+                        lastChannelWarn = now;
+                        plugin.getLogger().warning("The proxy did not register the channel '" + Packet.CHANNEL
+                                + "' - is MineStormFriends-Bungee / -Velocity installed on the proxy? "
+                                + "Cross-server changes now only sync through the database.");
+                    }
+                }
             }
         }
         plugin.handler().handle(p);
@@ -56,6 +80,7 @@ public final class BukkitNet {
             }
             return;
         }
+        if (instanceId.equals(p.origin())) return; // our own packet, already applied in broadcast()
         plugin.handler().handle(p);
     }
 

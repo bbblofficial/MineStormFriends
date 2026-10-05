@@ -3,6 +3,7 @@ options:
   friend-add-timeout: 5          # minutes until a request expires
   max-friends: 25                # default limit
   use-permission-limits: true    # honour minestormfriends.limit.<n>
+  lookup-timeout-ticks: 100      # how long /msf add waits for the other server (20 ticks = 1 s)
 
 storage:
   # FLATFILE | SQLITE | MYSQL   (changing this requires a restart)
@@ -23,6 +24,9 @@ storage:
     serverTimezone: UTC
     characterEncoding: utf8
     poolSize: 10
+    connectionTimeoutSeconds: 5    # give up quickly when the database is down
+    maxLifetimeSeconds: 1500       # must be lower than the MySQL wait_timeout
+    keepaliveSeconds: 60           # ping idle connections (0 = off, min 30)
 
   # used only when type: SQLITE
   file: friends.db

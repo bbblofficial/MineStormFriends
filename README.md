@@ -60,7 +60,7 @@ gradle clean build        # JDK 17 or 21
 Jars end up in `bukkit|bungee|velocity/build/libs/`.
 
 ## Notes
-* Friend requests are held in memory (not persisted) and expire after
-  `options.friend-add-timeout` minutes.
+* Friend requests are stored in the database (`msf_requests`, MYSQL / SQLITE) and expire after
+  `options.friend-add-timeout` minutes. `/msf admin dbcheck` tests the database connection.
 * With `FLATFILE` each server keeps its own copy and syncs via proxy messages
   (best effort). Use `MYSQL` for real networks.

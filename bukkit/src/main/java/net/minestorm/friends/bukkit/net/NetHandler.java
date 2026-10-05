@@ -21,10 +21,11 @@ public final class NetHandler {
     /** Message keys a MESSAGE packet may trigger. */
     private static final Set<String> MSG_KEYS = new HashSet<>(Arrays.asList(
             "request-sent", "request-not-allowed", "already-friends", "player-not-found",
-            "request-expired-sender", "request-expired-receiver", "request-denied-sender"));
+            "request-expired-sender", "request-expired-receiver", "request-denied-sender",
+            "request-failed", "db-error"));
     /** Replies that answer a pending /msf add. */
     private static final Set<String> ANSWER_KEYS = new HashSet<>(Arrays.asList(
-            "request-sent", "request-not-allowed", "already-friends"));
+            "request-sent", "request-not-allowed", "already-friends", "request-failed"));
 
     private final MineStormFriendsPlugin plugin;
 
@@ -111,34 +112,56 @@ public final class NetHandler {
 
     // ── requests ────────────────────────────────────────────────────
 
-    /** Only the server that hosts the target answers. */
+    /**
+     * Only the server that hosts the target answers.
+     * FIX: the request is written to the database FIRST; "request sent" is only
+     * confirmed to the sender (and broadcast to the other servers) when that worked.
+     */
     private void onRequestSend(Packet p) {
-        UUID from = uuid(p.arg(0));
-        String fromName = p.arg(1);
+        final UUID from = uuid(p.arg(0));
+        final String fromName = p.arg(1);
         Player target = Bukkit.getPlayerExact(p.arg(2));
         if (from == null || target == null || target.getUniqueId().equals(from)) return;
 
-        PlayerData td = plugin.friends().get(target.getUniqueId(), target.getName());
+        final UUID to = target.getUniqueId();
+        final String toName = target.getName();
+        PlayerData td = plugin.friends().get(to, toName);
         if (td.getFriends().contains(from)) { reply(from, "already-friends"); return; }
         if (!td.isAllowRequests())          { reply(from, "request-not-allowed"); return; }
 
-        // every server learns about the request, so it survives server switches
-        plugin.net().broadcast(new Packet(Packet.REQUEST_REG,
-                from.toString(), fromName, target.getUniqueId().toString(), target.getName()));
+        final int timeout = plugin.getConfig().getInt("options.friend-add-timeout", 5);
+        final long created = System.currentTimeMillis();
 
-        int timeout = plugin.getConfig().getInt("options.friend-add-timeout", 5);
-        reply(from, "request-sent", target.getName(), String.valueOf(timeout));
+        plugin.runDbWrite(() -> {
+            final boolean ok = plugin.data().saveRequest(from, fromName, to, toName, created);
+            plugin.sync(() -> {
+                if (!ok) { reply(from, "request-failed"); return; }
 
-        plugin.messages().sendList(target, "friend-request-header");
-        plugin.messages().line(target, "friend-request-from", fromName);
-        plugin.messages().sendRequestButtons(target, fromName);
-        plugin.messages().sendList(target, "friend-request-footer");
+                // every server learns about the request, so it survives server switches
+                plugin.net().broadcast(new Packet(Packet.REQUEST_REG,
+                        from.toString(), fromName, to.toString(), toName, String.valueOf(created)));
+
+                reply(from, "request-sent", toName, String.valueOf(timeout));
+
+                Player t = Bukkit.getPlayer(to);
+                if (t != null) {
+                    plugin.requests().markPrompted(to, from);
+                    plugin.requests().showPrompt(t, fromName);
+                }
+            });
+        });
     }
 
     private void onRequestReg(Packet p) {
         UUID from = uuid(p.arg(0)), to = uuid(p.arg(2));
         if (from == null || to == null) return;
-        plugin.requests().add(from, p.arg(1), to, p.arg(3));
+        long created;
+        try {
+            created = Long.parseLong(p.arg(4));
+        } catch (NumberFormatException e) {
+            created = System.currentTimeMillis();
+        }
+        plugin.requests().add(from, p.arg(1), to, p.arg(3), created);
     }
 
     private void onRequestRemove(Packet p) {
@@ -184,7 +207,9 @@ public final class NetHandler {
 
             if (!name.equals(f.getName())) { // keep stored names fresh (name changes)
                 f.setName(name);
-                plugin.data().addFriend(other.getUniqueId(), id, name);
+                final UUID ownerId = other.getUniqueId();
+                final String newName = name;
+                plugin.runDb(() -> plugin.data().addFriend(ownerId, id, newName));
             }
             if (realJoin) plugin.messages().send(other, "friend-join", name);
 

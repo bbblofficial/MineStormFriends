@@ -13,11 +13,16 @@ import java.security.MessageDigest;
 import java.util.Arrays;
 
 /**
- * Wire format:  [32 byte HMAC-SHA256][UTF type][byte argc][UTF arg]*
+ * Wire format:  [32 byte HMAC-SHA256][UTF type][byte argc][UTF arg]*[UTF origin]
  *
  * The proxy only relays the raw bytes. Backends verify the HMAC with the shared
  * secret from config.yml, so a client can never forge a packet.
  * Channel name is short + namespaced: valid on 1.8 (<=20 chars) and on 1.13+.
+ *
+ * FIX: the trailing "origin" field identifies the backend that sent the packet.
+ * The sender applies its own packet locally right away and ignores the echo
+ * coming back from the proxy, so actions keep working even when the proxy relay
+ * is broken. Old packets without the field decode with origin = "".
  */
 public final class Packet {
     public static final String CHANNEL = "msfriends:main";
@@ -28,7 +33,7 @@ public final class Packet {
     public static final String FRIEND_REMOVE  = "FREM"; // a, b, actorName ("" = silent)
     public static final String FRIEND_CLEAR   = "FCLR"; // owner, actorName ("" = silent)
     public static final String REQUEST_SEND   = "RSND"; // fromUuid, fromName, targetName
-    public static final String REQUEST_REG    = "RREG"; // from, fromName, to, toName
+    public static final String REQUEST_REG    = "RREG"; // from, fromName, to, toName, createdMillis
     public static final String REQUEST_REMOVE = "RDEL"; // to, from
     public static final String REQUEST_CLEAR  = "RCLR"; // to
     public static final String TOGGLE         = "TOGL"; // uuid, value, name
@@ -39,6 +44,7 @@ public final class Packet {
 
     private final String type;
     private final String[] args;
+    private String origin = "";
 
     public Packet(String type, String... args) {
         this.type = type;
@@ -49,6 +55,16 @@ public final class Packet {
     public String[] args() { return args; }
     public String arg(int i) { return i >= 0 && i < args.length && args[i] != null ? args[i] : ""; }
 
+    /** Id of the backend instance that sent this packet ("" if unknown / old packet). */
+    public String origin() { return origin; }
+
+    /** Copy of this packet tagged with the sending backend's instance id. */
+    public Packet withOrigin(String id) {
+        Packet copy = new Packet(type, args);
+        copy.origin = id == null ? "" : id;
+        return copy;
+    }
+
     public byte[] encode(String secret) {
         try {
             ByteArrayOutputStream body = new ByteArrayOutputStream();
@@ -56,6 +72,7 @@ public final class Packet {
             out.writeUTF(type);
             out.writeByte(args.length);
             for (String a : args) out.writeUTF(a == null ? "" : a);
+            out.writeUTF(origin == null ? "" : origin);
             byte[] payload = body.toByteArray();
 
             ByteArrayOutputStream full = new ByteArrayOutputStream();
@@ -79,7 +96,13 @@ public final class Packet {
             int n = in.readUnsignedByte();
             String[] args = new String[n];
             for (int i = 0; i < n; i++) args[i] = in.readUTF();
-            return new Packet(type, args);
+            Packet p = new Packet(type, args);
+            try {
+                p.origin = in.readUTF();
+            } catch (IOException noOrigin) {
+                p.origin = ""; // packet from an older version
+            }
+            return p;
         } catch (IOException e) {
             return null;
         }

@@ -36,9 +36,14 @@ public final class AddSub implements Sub {
         plugin.requests().await(myId);
         plugin.net().broadcast(new Packet(Packet.REQUEST_SEND, myId.toString(), me.getName(), targetName));
 
+        // FIX: 2 s was too short for a database write + proxy round trip, and when nobody
+        // answered the request was simply dropped ("player not found"). Now the request is
+        // stored in the shared database instead, so the target still gets it.
+        long wait = plugin.getConfig().getLong("options.lookup-timeout-ticks", 100L);
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (plugin.requests().clearAwaiting(myId) && me.isOnline())
-                plugin.messages().send(me, "player-not-found", targetName);
-        }, 40L);
+            if (!plugin.requests().clearAwaiting(myId)) return; // somebody answered
+            if (!me.isOnline()) return;
+            plugin.requests().sendViaStore(me, targetName);
+        }, wait);
     }
 }

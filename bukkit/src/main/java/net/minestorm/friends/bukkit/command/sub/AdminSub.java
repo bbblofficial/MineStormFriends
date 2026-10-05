@@ -18,7 +18,7 @@ import java.util.UUID;
 
 public final class AdminSub implements Sub {
     private static final List<String> ACTIONS = Arrays.asList(
-            "help", "reload", "list", "add", "remove", "removeall", "clearrequests", "toggle", "info");
+            "help", "reload", "list", "add", "remove", "removeall", "clearrequests", "toggle", "info", "dbcheck");
 
     public static List<String> actions() { return ACTIONS; }
 
@@ -50,6 +50,16 @@ public final class AdminSub implements Sub {
         if (!MSFCommand.has(s, "minestormfriends.admin." + action)) { m.send(s, "no-permission"); return; }
 
         switch (action) {
+            case "dbcheck": {
+                s.sendMessage(m.prefix() + Messages.color("&7Running database check..."));
+                plugin.runDb(() -> {
+                    final List<String> lines = plugin.data().diagnose();
+                    plugin.sync(() -> {
+                        for (String line : lines) s.sendMessage(Messages.color("&8 \u2022 &f" + line));
+                    });
+                });
+                return;
+            }
             case "reload": {
                 plugin.reloadEverything();
                 m.send(s, "admin.reloaded");

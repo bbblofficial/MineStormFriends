@@ -99,3 +99,5 @@ admin:
 # ── Join / quit notifications ──
 friend-join: "&8[&b+&8] &f%0% &7joined the network."
 friend-quit: "&8[&b-&8] &f%0% &7left the network."
+request-failed: "&cThe request could not be saved to the database. Please try again."
+db-error: "&cA database error occurred - your last change may not have been saved. Tell an admin."

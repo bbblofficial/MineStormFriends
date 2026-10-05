@@ -12,6 +12,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
+import java.util.Collections;
 import java.util.UUID;
 
 public final class PlayerListener implements Listener {
@@ -37,24 +38,30 @@ public final class PlayerListener implements Listener {
     public void onJoin(PlayerJoinEvent e) {
         final Player p = e.getPlayer();
         final UUID id = p.getUniqueId();
-        if (plugin.friends().cached(id) == null) plugin.friends().cacheLoad(id, p.getName());
+        final String name = p.getName();
+        if (plugin.friends().cached(id) == null) plugin.friends().cacheLoad(id, name);
 
-        plugin.data().saveProfile(id, p.getName(), true);
-        plugin.net().broadcast(new Packet(Packet.JOIN, id.toString(), p.getName(), plugin.serverName()));
+        // FIX: no database write on the main thread
+        plugin.runDb(() -> plugin.data().saveProfile(id, name, true));
+        plugin.net().broadcast(new Packet(Packet.JOIN, id.toString(), name, plugin.serverName()));
+
+        // requests that were sent while the player was offline / on another server
+        plugin.requests().syncFromStore(Collections.singletonList(id), false);
 
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!p.isOnline()) return;
             int n = plugin.requests().get(id).size();
             if (n > 0) plugin.messages().send(p, "pending-requests", n);
-        }, 40L);
+        }, 60L);
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent e) {
         Player p = e.getPlayer();
-        UUID id = p.getUniqueId();
-        plugin.net().broadcast(new Packet(Packet.QUIT, id.toString(), p.getName(), plugin.serverName()));
-        plugin.data().saveProfile(id, p.getName(), true);
+        final UUID id = p.getUniqueId();
+        final String name = p.getName();
+        plugin.net().broadcast(new Packet(Packet.QUIT, id.toString(), name, plugin.serverName()));
+        plugin.runDb(() -> plugin.data().saveProfile(id, name, true));
         plugin.friends().unload(id);
     }
 }

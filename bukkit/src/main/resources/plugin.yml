@@ -53,6 +53,7 @@ permissions:
       minestormfriends.admin.clearrequests: true
       minestormfriends.admin.toggle: true
       minestormfriends.admin.info: true
+      minestormfriends.admin.dbcheck: true
   minestormfriends.admin.reload:
     default: op
   minestormfriends.admin.list:
@@ -68,6 +69,8 @@ permissions:
   minestormfriends.admin.toggle:
     default: op
   minestormfriends.admin.info:
+    default: op
+  minestormfriends.admin.dbcheck:
     default: op
 
   minestormfriends.bypass:
